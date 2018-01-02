@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">IRC</string>
+    <string name="nick_hint">Nickname</string>
+    <string name="serv_hint">Server</string>
+    <string name="user_hint">Username</string>
+    <string name="pass_hint">Password</string>
+    <string name="auth_check">Authenticate</string>
+    <string name="login_btn">Login</string>
+    <string name="logo_desc">Binary Duo IRC Logo</string>
+    <string name="title_activity_chat">ChatActivity</string>
+    <string name="chat_hint">Chat here</string>
+
+    <string name="navigation_drawer_open">Open navigation drawer</string>
+    <string name="navigation_drawer_close">Close navigation drawer</string>
+
+    <string name="action_settings">Settings</string>
+</resources>
