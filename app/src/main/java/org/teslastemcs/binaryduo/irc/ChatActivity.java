@@ -16,10 +16,16 @@ import android.view.Menu;
 import android.view.MenuItem;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.Socket;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class ChatActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener {
+
+    ConcurrentLinkedQueue<String> inQueue;
+    ConcurrentLinkedQueue<String> outQueue;
 
     private String nick;
 
@@ -42,7 +48,9 @@ public class ChatActivity extends AppCompatActivity
         this.nick = intent.getStringExtra("EXTRA_NICK");
         String server = intent.getStringExtra("EXTRA_SERVER");
         String port = "6667";
-        new NetworkTask().doInBackground(server, port);
+        inQueue = new ConcurrentLinkedQueue<String>();
+        outQueue = new ConcurrentLinkedQueue<String>();
+        new NetworkTask().execute(server, port);
     }
 
     @Override
@@ -89,9 +97,35 @@ public class ChatActivity extends AppCompatActivity
             int port = Integer.parseInt(params[1]);
             try{
                 Socket socket = new Socket(host, port);
+                OutputStream outStream = socket.getOutputStream();
+                InputStream inStream = socket.getInputStream();
                 while(run){
-
+                    if(inStream.available() > 0){
+                        boolean foundCR = false;
+                        StringBuilder sb = new StringBuilder();
+                        while(true){
+                            int next = inStream.read();
+                            if(foundCR){
+                                if(next == '\n'){
+                                    break;
+                                } else{
+                                    foundCR = false;
+                                    sb.append('\n');
+                                }
+                            }
+                            if(next == '\r'){
+                                foundCR = true;
+                            } else {
+                                sb.append((char)next);
+                            }
+                        }
+                        String result = sb.toString();
+                        inQueue.add(result);
+                    }
                 }
+                inStream.close();
+                outStream.close();
+                socket.close();
             } catch(IOException e){
                 return false;
             }
