@@ -5,6 +5,7 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
+import android.util.Log;
 import android.view.View;
 import android.support.design.widget.NavigationView;
 import android.support.v4.view.GravityCompat;
@@ -50,6 +51,9 @@ public class ChatActivity extends AppCompatActivity
         String port = "6667";
         inQueue = new ConcurrentLinkedQueue<String>();
         outQueue = new ConcurrentLinkedQueue<String>();
+        outQueue.add("NICK " + nick + '\n');
+        outQueue.add("USER guest - - :Mercury");
+        outQueue.add("JOIN binaryduo_mercury\n");
         new NetworkTask().execute(server, port);
     }
 
@@ -99,8 +103,11 @@ public class ChatActivity extends AppCompatActivity
                 Socket socket = new Socket(host, port);
                 OutputStream outStream = socket.getOutputStream();
                 InputStream inStream = socket.getInputStream();
+                Log.d("NetworkTask", "Connected to socket");
                 while(run){
+                    // process input
                     if(inStream.available() > 0){
+                        Log.d("NetworkTask", "Detected Message");
                         boolean foundCR = false;
                         StringBuilder sb = new StringBuilder();
                         while(true){
@@ -121,6 +128,17 @@ public class ChatActivity extends AppCompatActivity
                         }
                         String result = sb.toString();
                         inQueue.add(result);
+                        Log.d("NetworkTask", "Processed Message:");
+                        Log.d("Message", result);
+                    }
+
+                    // process output
+                    if(!outQueue.isEmpty()){
+                        Log.d("NetworkTask", "Sending Message");
+                        String message = outQueue.poll();
+                        outStream.write(message.getBytes());
+                        Log.d("NetworkTask", "Message Sent:");
+                        Log.d("Message", message);
                     }
                 }
                 inStream.close();
