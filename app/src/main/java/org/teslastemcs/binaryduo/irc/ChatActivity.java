@@ -15,6 +15,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.EditText;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -29,6 +30,8 @@ public class ChatActivity extends AppCompatActivity
     ConcurrentLinkedQueue<String> outQueue;
 
     private String nick;
+
+    private static final byte[] DELIMITER = {'\r', '\n'};
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,10 +54,10 @@ public class ChatActivity extends AppCompatActivity
         String port = "6667";
         inQueue = new ConcurrentLinkedQueue<String>();
         outQueue = new ConcurrentLinkedQueue<String>();
-        outQueue.add("NICK " + nick + '\n');
-        outQueue.add("USER guest - - :Mercury");
-        outQueue.add("JOIN binaryduo_mercury\n");
         new NetworkTask().execute(server, port);
+        outQueue.add("NICK " + nick);
+        outQueue.add("USER " + nick + " 0 " + server + " :Mercury");
+        //outQueue.add("JOIN binaryduo_mercury");
     }
 
     @Override
@@ -93,6 +96,21 @@ public class ChatActivity extends AppCompatActivity
         return true;
     }
 
+    public void sendPress(View view){
+        Log.i("ChatActivity", "Send button pressed");
+        EditText chatBox = findViewById(R.id.chatBox);
+        String message = chatBox.getText().toString();
+        Log.i("Message", message);
+        if(message.charAt(0) == '/'){
+            Log.i("Message Type", "Command");
+            outQueue.add(message.substring(1));
+        } else{
+            Log.i("Message Type", "Notice");
+            outQueue.add("NOTICE #binaryduo_mercury " + message);
+        }
+        chatBox.setText("");
+    }
+
     private class NetworkTask extends AsyncTask<String, Boolean, Boolean> {
         private boolean run;
         protected Boolean doInBackground(String... params){
@@ -103,11 +121,11 @@ public class ChatActivity extends AppCompatActivity
                 Socket socket = new Socket(host, port);
                 OutputStream outStream = socket.getOutputStream();
                 InputStream inStream = socket.getInputStream();
-                Log.d("NetworkTask", "Connected to socket");
+                Log.i("NetworkTask", "Connected to socket");
                 while(run){
                     // process input
                     if(inStream.available() > 0){
-                        Log.d("NetworkTask", "Detected Message");
+                        Log.i("NetworkTask", "Detected Message");
                         boolean foundCR = false;
                         StringBuilder sb = new StringBuilder();
                         while(true){
@@ -128,17 +146,18 @@ public class ChatActivity extends AppCompatActivity
                         }
                         String result = sb.toString();
                         inQueue.add(result);
-                        Log.d("NetworkTask", "Processed Message:");
-                        Log.d("Message", result);
+                        Log.i("NetworkTask", "Processed Message:");
+                        Log.i("Message", result);
                     }
 
                     // process output
                     if(!outQueue.isEmpty()){
-                        Log.d("NetworkTask", "Sending Message");
+                        Log.i("NetworkTask", "Sending Message");
                         String message = outQueue.poll();
                         outStream.write(message.getBytes());
-                        Log.d("NetworkTask", "Message Sent:");
-                        Log.d("Message", message);
+                        outStream.write(DELIMITER);
+                        Log.i("NetworkTask", "Message Sent:");
+                        Log.i("Message", message);
                     }
                 }
                 inStream.close();
