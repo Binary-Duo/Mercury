@@ -16,6 +16,7 @@ import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.EditText;
+import android.widget.TextView;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -55,6 +56,7 @@ public class ChatActivity extends AppCompatActivity
         inQueue = new ConcurrentLinkedQueue<String>();
         outQueue = new ConcurrentLinkedQueue<String>();
         new NetworkTask().execute(server, port);
+        new MessageTask().execute();
         outQueue.add("NICK " + nick);
         outQueue.add("USER " + nick + " 0 " + server + " :Mercury");
         //outQueue.add("JOIN binaryduo_mercury");
@@ -106,9 +108,33 @@ public class ChatActivity extends AppCompatActivity
             outQueue.add(message.substring(1));
         } else{
             Log.i("Message Type", "Notice");
-            outQueue.add("NOTICE #binaryduo_mercury " + message);
+            outQueue.add("NOTICE #binduo " + message);
         }
         chatBox.setText("");
+    }
+
+    private class MessageTask extends AsyncTask<String, Boolean, Boolean> //might have different params
+    {
+        private boolean run;
+        protected Boolean doInBackground(String... params) {
+            run = true;
+            while (run && !inQueue.isEmpty()) {
+                //ConcurrentLinkedQueue<String> queueTest = new ConcurrentLinkedQueue<>(); //Testing Purposes
+                //queueTest.add("HelloWorld"); //Testing Purposes
+                String message = inQueue.poll();
+                int nickSpaceIndex = message.substring(message.indexOf("!")).lastIndexOf(" ");
+                String messageNick = message.substring(nickSpaceIndex+1, message.indexOf("!"));
+                String messageText = message.substring(message.indexOf(":")+1, nickSpaceIndex);
+                String messageUser = message.substring(message.indexOf("!")+1, message.indexOf("@"));
+                String messageHost = message.substring(message.indexOf("@")+1);
+                Log.d("MessageTask", message);
+                String command = "TIME chat.freenode.net";
+                outQueue.add(command);
+                TextView textView2 = (TextView)findViewById(R.id.textView2);
+                textView2.append("\n[" + inQueue.poll()/*time*/ + "] <@" + messageNick + ">" + messageText);
+            }
+            return run;
+        }
     }
 
     private class NetworkTask extends AsyncTask<String, Boolean, Boolean> {
