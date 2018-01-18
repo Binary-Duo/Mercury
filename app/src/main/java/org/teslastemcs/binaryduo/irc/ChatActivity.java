@@ -2,9 +2,8 @@ package org.teslastemcs.binaryduo.irc;
 
 import android.content.Intent;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
-import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
 import android.util.Log;
 import android.view.View;
 import android.support.design.widget.NavigationView;
@@ -38,16 +37,16 @@ public class ChatActivity extends AppCompatActivity
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_chat);
-        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
                 this, drawer, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
         drawer.addDrawerListener(toggle);
         toggle.syncState();
 
-        NavigationView navigationView = (NavigationView) findViewById(R.id.nav_view);
+        NavigationView navigationView = findViewById(R.id.nav_view);
         navigationView.setNavigationItemSelectedListener(this);
         Intent intent = getIntent();
         this.nick = intent.getStringExtra("EXTRA_NICK");
@@ -55,8 +54,10 @@ public class ChatActivity extends AppCompatActivity
         String port = "6667";
         inQueue = new ConcurrentLinkedQueue<String>();
         outQueue = new ConcurrentLinkedQueue<String>();
-        new NetworkTask().execute(server, port);
-        new MessageTask().execute();
+        MessageTask mtask = new MessageTask();
+        NetworkTask ntask = new NetworkTask();
+        startTask(mtask);
+        startTask(ntask, server, port);
         outQueue.add("NICK " + nick);
         outQueue.add("USER " + nick + " 0 " + server + " :Mercury");
         //outQueue.add("JOIN binaryduo_mercury");
@@ -64,7 +65,7 @@ public class ChatActivity extends AppCompatActivity
 
     @Override
     public void onBackPressed() {
-        DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
         if (drawer.isDrawerOpen(GravityCompat.START)) {
             drawer.closeDrawer(GravityCompat.START);
         } else {
@@ -98,76 +99,103 @@ public class ChatActivity extends AppCompatActivity
         return true;
     }
 
-    public void sendPress(View view){
+    public void sendPress(View view) {
         Log.i("ChatActivity", "Send button pressed");
         EditText chatBox = findViewById(R.id.chatBox);
         String message = chatBox.getText().toString();
         Log.i("Message", message);
-        if(message.charAt(0) == '/'){
+        if (message.charAt(0) == '/') {
             Log.i("Message Type", "Command");
             outQueue.add(message.substring(1));
-        } else{
+        } else {
             Log.i("Message Type", "Notice");
-            outQueue.add("NOTICE #binduo " + message);
+            outQueue.add("PRIVMSG #binduo " + message);
         }
         chatBox.setText("");
     }
 
-    private class MessageTask extends AsyncTask<String, Boolean, Boolean> //might have different params
+    private void startTask(AsyncTask asyncTask, String... params) {
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB)
+            asyncTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, params);
+        else
+            asyncTask.execute(params);
+    }
+
+    private void handlePing(){
+        outQueue.add("PONG mercury");
+    }
+
+    private class MessageTask extends AsyncTask<String, String, Boolean> //might have different params
     {
         private boolean run;
+
+        private TextView messageView;
+
         protected Boolean doInBackground(String... params) {
             run = true;
-            while (run && !inQueue.isEmpty()) {
-                //ConcurrentLinkedQueue<String> queueTest = new ConcurrentLinkedQueue<>(); //Testing Purposes
-                //queueTest.add("HelloWorld"); //Testing Purposes
-                String message = inQueue.poll();
-                int nickSpaceIndex = message.substring(message.indexOf("!")).lastIndexOf(" ");
-                String messageNick = message.substring(nickSpaceIndex+1, message.indexOf("!"));
-                String messageText = message.substring(message.indexOf(":")+1, nickSpaceIndex);
-                String messageUser = message.substring(message.indexOf("!")+1, message.indexOf("@"));
-                String messageHost = message.substring(message.indexOf("@")+1);
-                Log.d("MessageTask", message);
-                String command = "TIME chat.freenode.net";
-                outQueue.add(command);
-                TextView textView2 = (TextView)findViewById(R.id.textView2);
-                textView2.append("\n[" + inQueue.poll()/*time*/ + "] <@" + messageNick + ">" + messageText);
+            messageView = findViewById(R.id.textView2);
+            Log.i("MessageTask", "Message task started");
+            while (run) {
+                if (!inQueue.isEmpty()) {
+                    //ConcurrentLinkedQueue<String> queueTest = new ConcurrentLinkedQueue<>(); //Testing Purposes
+                    //queueTest.add("HelloWorld"); //Testing Purposes
+                    String message = inQueue.poll();
+                    Log.i("MessageTask", message);
+                    String prefix = "";
+                    if(message.charAt(0) == ':') { //indicates presense of a prefix
+                        int spaceIndex = message.indexOf(' ');
+                        prefix = message.substring(0,spaceIndex);
+                        message = message.substring(spaceIndex);
+                    }
+                    int spaceIndex = message.indexOf(' ');
+                    String command = message.substring(0, spaceIndex).toUpperCase();
+                    if(command.equals("PING")){
+                        handlePing();
+                        continue;
+                    }
+                    publishProgress(message);
+                }
             }
             return run;
+        }
+
+        protected void onProgressUpdate(String... messages){
+            messageView.append("\n" + messages[0]);
         }
     }
 
     private class NetworkTask extends AsyncTask<String, Boolean, Boolean> {
         private boolean run;
-        protected Boolean doInBackground(String... params){
+
+        protected Boolean doInBackground(String... params) {
             run = true;
             String host = params[0];
             int port = Integer.parseInt(params[1]);
-            try{
+            try {
                 Socket socket = new Socket(host, port);
                 OutputStream outStream = socket.getOutputStream();
                 InputStream inStream = socket.getInputStream();
                 Log.i("NetworkTask", "Connected to socket");
-                while(run){
+                while (run) {
                     // process input
-                    if(inStream.available() > 0){
+                    if (inStream.available() > 0) {
                         Log.i("NetworkTask", "Detected Message");
                         boolean foundCR = false;
                         StringBuilder sb = new StringBuilder();
-                        while(true){
+                        while (true) {
                             int next = inStream.read();
-                            if(foundCR){
-                                if(next == '\n'){
+                            if (foundCR) {
+                                if (next == '\n') {
                                     break;
-                                } else{
+                                } else {
                                     foundCR = false;
                                     sb.append('\n');
                                 }
                             }
-                            if(next == '\r'){
+                            if (next == '\r') {
                                 foundCR = true;
                             } else {
-                                sb.append((char)next);
+                                sb.append((char) next);
                             }
                         }
                         String result = sb.toString();
@@ -177,7 +205,7 @@ public class ChatActivity extends AppCompatActivity
                     }
 
                     // process output
-                    if(!outQueue.isEmpty()){
+                    if (!outQueue.isEmpty()) {
                         Log.i("NetworkTask", "Sending Message");
                         String message = outQueue.poll();
                         outStream.write(message.getBytes());
@@ -189,7 +217,7 @@ public class ChatActivity extends AppCompatActivity
                 inStream.close();
                 outStream.close();
                 socket.close();
-            } catch(IOException e){
+            } catch (IOException e) {
                 return false;
             }
             return true;
